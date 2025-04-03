@@ -9,7 +9,7 @@ def notch_matrix(notches_x, notches_y, radii, dims):
     # Matrix params
     width, height = dims
     notch_mat = np.ones((width, height))
-    radii = np.array(radii) / 2  # Convert radii to half their size
+    radii = np.array(radii) / 2
 
     # Create a grid of indices
     x = np.arange(width)
@@ -29,7 +29,7 @@ def gaussian_notch_matrix(notches_x, notches_y, radii, dims, sigma):
     # Matrix params
     width, height = dims
     notch_mat = np.ones((width, height))
-    radii = np.array(radii) / 2  # Convert radii to half their size
+    radii = np.array(radii) / 2
     
     # Create a grid of indices
     x = np.arange(width)
