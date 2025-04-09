@@ -34,22 +34,25 @@ class InteractiveNotchGUI:
 
         # Frontend tools
         self.load_button = tk.Button(self.main_frame, text = "Load Image", command = self.load_image)
-        self.load_button.grid(row = 0, column = 0, padx = 10, pady = 10)
+        self.load_button.grid(row = 0, column = 0, padx = 5, pady = 10)
+
+        self.noise_button = tk.Button(self.main_frame, text = "Add Noise", command = self.add_noise)
+        self.noise_button.grid(row = 0, column = 1, padx = 5, pady = 10)
 
         self.reset_button = tk.Button(self.main_frame, text="Reset", command=self.reset_image)
-        self.reset_button.grid(row = 0, column = 1, padx = 10, pady = 10)
+        self.reset_button.grid(row = 0, column = 2, padx = 5, pady = 10)
 
         self.line_width_scale = tk.Scale(self.main_frame, from_ = 1, to_ = 50, orient = tk.HORIZONTAL, label = "Line Width", command = self.update_line_width)
         self.line_width_scale.set(self.line_width)
-        self.line_width_scale.grid(row = 0, column = 2, padx = 10, pady = 10, sticky = "ew")
+        self.line_width_scale.grid(row = 0, column = 3, padx = 5, pady = 10, sticky = "ew")
 
         self.copy_button = tk.Button(self.main_frame, text = "Generate Filtered Image", command = self.copy_to_canvas4)
-        self.copy_button.grid(row = 0, column = 3, padx = 10, pady = 10)
+        self.copy_button.grid(row = 0, column = 4, padx = 5, pady = 10)
 
         self.design_notches = tk.Button(self.main_frame, text = "Design Notches", command = self.design_notch)
-        self.design_notches.grid(row = 0, column = 4, padx = 10, pady = 10)
+        self.design_notches.grid(row = 0, column = 5, padx = 5, pady = 10)
 
-        # Four canvases that contain image info, including origional image, FFTs (drawn and undrawn), and filtered image
+        # Four canvases that contain origional image, FFTs, and filtered image
         self.canvas_frame = tk.Frame(self.main_frame)
         self.canvas_frame.grid(row = 1, column = 0, columnspan = 4)
 
@@ -77,10 +80,11 @@ class InteractiveNotchGUI:
         self.notch_token = 0
 
     def load_image(self):
+
         filepath = filedialog.askopenfilename(filetypes = [("Image files", "*.png;*.jpg;*.jpeg")])
         if filepath:
             # Load image + params
-            self.original_image = Image.open(filepath).convert("L")  # Convert to grayscale for FT
+            self.original_image = Image.open(filepath).convert("L") # Convert to grayscale
             self.img_width, self.img_height = self.original_image.size
             window_width = self.window.winfo_width()
             window_height = self.window.winfo_height()
@@ -107,7 +111,7 @@ class InteractiveNotchGUI:
                     self.new_height = min(max_height, self.img_height)
                     self.new_width = int(self.new_height * aspect_ratio)
 
-            # Resize image and convert to tkinter photo obj, then display on top left canvas
+            # Apply resizing parameters on the canvases when an image is loaded in
             image_resized = self.original_image.resize((self.new_width, self.new_height))
             img_tk = ImageTk.PhotoImage(image_resized)
 
@@ -120,13 +124,99 @@ class InteractiveNotchGUI:
             self.canvas3.config(width = self.new_width, height = self.new_height)
             self.canvas4.config(width = self.new_width, height = self.new_height)
 
+    def add_noise(self):
+
+        # Check if an image is loaded into canvas 1 -> requirement for added noise
+        if not hasattr(self.canvas1, 'image'):
+            return
+
+        # Create a new window for noise selection
+        noise_window = tk.Toplevel(self.window)
+        noise_window.title("Add Noise")
+        
+        # Add a slider for noise level (in dB)
+        tk.Label(noise_window, text="Noise Level (dB)").pack(padx = 10, pady = 5)
+        noise_slider = tk.Scale(noise_window, from_ = -10, to = 50, orient = tk.HORIZONTAL, resolution = 1)
+        noise_slider.set(0) # Default slider @ 0dB
+        noise_slider.pack(padx = 10, pady = 10)
+        
+        def apply_noise():
+
+            # Get the current image from canvas1
+            img = self.original_image.resize((self.new_width, self.new_height))
+            img_array = np.array(img, dtype = np.float32)
+            
+            # Convert dB to linear scale for noise variance
+            noise_level_db = noise_slider.get()
+            self.noise_variance = 10 ** (noise_level_db / 10)  # Store the noise variance
+            
+            # Generate Gaussian noise
+            noise = np.random.normal(0, np.sqrt(self.noise_variance), img_array.shape)
+            noisy_img_array = img_array + noise
+            
+            # Clip values to 0-255 range and convert back to uint8
+            noisy_img_array = np.clip(noisy_img_array, 0, 255).astype(np.uint8)
+            noisy_img = Image.fromarray(noisy_img_array)
+            
+            # Update canvas1 with noisy image
+            img_tk = ImageTk.PhotoImage(noisy_img)
+            self.canvas1.create_image(0, 0, anchor = tk.NW, image = img_tk)
+            self.canvas1.image = img_tk
+            
+            # Update the Fourier transforms
+            self.display_fourier_transform(noisy_img)
+            
+            noise_window.destroy()
+
+        # Add save button
+        save_button = tk.Button(noise_window, text = "Save", command = apply_noise)
+        save_button.pack(padx = 10, pady = 20)
+        
+        def apply_noise():
+
+            # Current image from canvas1
+            img = self.original_image.resize((self.new_width, self.new_height))
+            img_array = np.array(img, dtype = np.float32)
+            
+            # dB -> linear scale and generate noise on 8 bit scale
+            noise_level_db = noise_slider.get()
+            noise_variance = 10 ** (noise_level_db / 10)
+            noise = np.random.normal(0, np.sqrt(noise_variance), img_array.shape)
+            noisy_img_array = img_array + noise
+            noisy_img_array = np.clip(noisy_img_array, 0, 255).astype(np.uint8)
+            noisy_img = Image.fromarray(noisy_img_array)
+            
+            # Update canvases with noise
+            img_tk = ImageTk.PhotoImage(noisy_img)
+            self.canvas1.create_image(0, 0, anchor = tk.NW, image = img_tk)
+            self.canvas1.image = img_tk
+            self.display_fourier_transform(noisy_img)
+            
+            noise_window.destroy()
+    
+        # Save button
+        save_button = tk.Button(noise_window, text = "Save", command = apply_noise)
+        save_button.pack(padx = 10, pady = 10)
+
     def reset_image(self):
-        # Reset canvas 2 and 4 (right column of boxes)
+
+        # Reset canvas1 to original image
+        if self.original_image:
+            image_resized = self.original_image.resize((self.new_width, self.new_height))
+            img_tk = ImageTk.PhotoImage(image_resized)
+            
+            self.canvas1.delete("all")
+            self.canvas1.create_image(0, 0, anchor = tk.NW, image = img_tk)
+            self.canvas1.image = img_tk
+            
+            self.display_fourier_transform(image_resized)
+        
         self.canvas2.delete("drawing")
         self.canvas4.delete("all")
         self.drawing_coords = []
 
     def display_fourier_transform(self, image):
+
         image_array = np.array(image)
         f_transform = np.fft.fft2(image_array)
         self.f_transform_shifted = np.fft.fftshift(f_transform)
@@ -147,12 +237,14 @@ class InteractiveNotchGUI:
         self.canvas3.image = ft_img_tk
 
     def start_draw(self, event):
+
         self.drawing = True
         self.last_x = event.x
         self.last_y = event.y
         self.drawing_coords.append((event.x, event.y, self.line_width))
 
     def draw(self, event):
+
         # Draw using mouse pointer
         if self.drawing:
             self.canvas2.create_line(self.last_x, self.last_y, event.x, event.y, width = self.line_width, fill = "black", capstyle = tk.ROUND, smooth = tk.TRUE, tags = "drawing")
@@ -161,9 +253,11 @@ class InteractiveNotchGUI:
             self.drawing_coords.append((event.x, event.y, self.line_width))
 
     def update_line_width(self, value):
+
         self.line_width = int(value)
 
     def copy_to_canvas4(self):
+
         self.canvas4.delete("all")
 
         # Plot the filtered img
@@ -197,7 +291,21 @@ class InteractiveNotchGUI:
                 self.canvas4.create_image(0, 0, anchor = tk.NW, image = img_spec)
                 self.canvas4.image = img_spec
 
+                # Calculate and display SNR if noise was added
+                if hasattr(self, 'noise_variance'):
+                    # Get the original image (signal)
+                    original_img = np.array(self.original_image.resize((self.new_width, self.new_height)), dtype=np.float32)
+                    
+                    # Calculate SNR (dB)
+                    signal_power = np.mean(original_img**2)
+                    noise_power = self.noise_variance
+                    if noise_power > 0:
+                        snr_linear = signal_power / noise_power
+                        snr_db = 10 * np.log10(snr_linear)
+                        print(f"Output Image SNR: {snr_db:.2f} dB")
+
     def design_notch(self):
+
         # Create a new window for the notch filter settings
         notch_window = tk.Toplevel(self.window)
         notch_window.title("Set Notch Filter Parameters")
@@ -228,6 +336,7 @@ class InteractiveNotchGUI:
 
         # Function to hide the standard deviation query if the filter type is ideal
         def update_sigma_visibility(*args):
+
             if filter_type_var.get() == "ideal":
                 std_dev_label.pack_forget()
                 std_dev_entry.pack_forget()
@@ -240,6 +349,7 @@ class InteractiveNotchGUI:
 
         # Save button to change filter parameters
         def save_params():
+
             self.filter_min = min_slider.get()
             self.filter_max = max_slider.get()
             if filter_type_var.get() == "gaussian":
