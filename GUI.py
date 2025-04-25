@@ -125,7 +125,6 @@ class InteractiveNotchGUI:
             self.canvas4.config(width = self.new_width, height = self.new_height)
 
     def add_noise(self):
-
         # Check if an image is loaded into canvas 1 -> requirement for added noise
         if not hasattr(self.canvas1, 'image'):
             return
@@ -135,16 +134,18 @@ class InteractiveNotchGUI:
         noise_window.title("Add Noise")
         
         # Add a slider for noise level (in dB)
-        tk.Label(noise_window, text="Noise Level (dB)").pack(padx = 10, pady = 5)
-        noise_slider = tk.Scale(noise_window, from_ = -10, to = 50, orient = tk.HORIZONTAL, resolution = 1)
+        tk.Label(noise_window, text="Noise Level (dB)").pack(padx=10, pady=5)
+        noise_slider = tk.Scale(noise_window, from_=-10, to=50, orient=tk.HORIZONTAL, resolution=1)
         noise_slider.set(0) # Default slider @ 0dB
-        noise_slider.pack(padx = 10, pady = 10)
+        noise_slider.pack(padx=10, pady=10)
         
         def apply_noise():
-
             # Get the current image from canvas1
             img = self.original_image.resize((self.new_width, self.new_height))
-            img_array = np.array(img, dtype = np.float32)
+            img_array = np.array(img, dtype=np.float32)
+            
+            # Store original image for SNR calculation
+            self.original_array = img_array.copy()
             
             # Convert dB to linear scale for noise variance
             noise_level_db = noise_slider.get()
@@ -158,9 +159,17 @@ class InteractiveNotchGUI:
             noisy_img_array = np.clip(noisy_img_array, 0, 255).astype(np.uint8)
             noisy_img = Image.fromarray(noisy_img_array)
             
+            # Calculate and display input SNR
+            signal_power = np.mean(self.original_array**2)
+            noise_power = np.mean((noisy_img_array.astype(np.float32) - self.original_array)**2)
+            if noise_power > 0:
+                snr_linear = noise_power / self.noise_variance
+                snr_db = 10 * np.log10(snr_linear)
+                print(f"\nInput Image SNR after noise: {snr_db:.2f} dB")
+            
             # Update canvas1 with noisy image
             img_tk = ImageTk.PhotoImage(noisy_img)
-            self.canvas1.create_image(0, 0, anchor = tk.NW, image = img_tk)
+            self.canvas1.create_image(0, 0, anchor=tk.NW, image=img_tk)
             self.canvas1.image = img_tk
             
             # Update the Fourier transforms
@@ -168,35 +177,9 @@ class InteractiveNotchGUI:
             
             noise_window.destroy()
 
-        # Add save button
-        save_button = tk.Button(noise_window, text = "Save", command = apply_noise)
-        save_button.pack(padx = 10, pady = 20)
-        
-        def apply_noise():
-
-            # Current image from canvas1
-            img = self.original_image.resize((self.new_width, self.new_height))
-            img_array = np.array(img, dtype = np.float32)
-            
-            # dB -> linear scale and generate noise on 8 bit scale
-            noise_level_db = noise_slider.get()
-            noise_variance = 10 ** (noise_level_db / 10)
-            noise = np.random.normal(0, np.sqrt(noise_variance), img_array.shape)
-            noisy_img_array = img_array + noise
-            noisy_img_array = np.clip(noisy_img_array, 0, 255).astype(np.uint8)
-            noisy_img = Image.fromarray(noisy_img_array)
-            
-            # Update canvases with noise
-            img_tk = ImageTk.PhotoImage(noisy_img)
-            self.canvas1.create_image(0, 0, anchor = tk.NW, image = img_tk)
-            self.canvas1.image = img_tk
-            self.display_fourier_transform(noisy_img)
-            
-            noise_window.destroy()
-    
         # Save button
-        save_button = tk.Button(noise_window, text = "Save", command = apply_noise)
-        save_button.pack(padx = 10, pady = 10)
+        save_button = tk.Button(noise_window, text="Save", command=apply_noise)
+        save_button.pack(padx=10, pady=10)
 
     def reset_image(self):
 
@@ -293,15 +276,19 @@ class InteractiveNotchGUI:
 
                 # Calculate and display SNR if noise was added
                 if hasattr(self, 'noise_variance'):
+
                     # Get the original image (signal)
-                    original_img = np.array(self.original_image.resize((self.new_width, self.new_height)), dtype=np.float32)
+                    original_img = np.array(img_filtered_normalized.resize((self.new_width, self.new_height)), dtype=np.float32)
                     
                     # Calculate SNR (dB)
-                    signal_power = np.mean(original_img**2)
+                    signal_power = np.mean((img_filtered_normalized)**2)
                     noise_power = self.noise_variance
                     if noise_power > 0:
-                        snr_linear = signal_power / noise_power
+                        snr_linear = 255 * signal_power / (noise_power)
                         snr_db = 10 * np.log10(snr_linear)
+                        print(signal_power)
+                        print('and')
+                        print(noise_power)
                         print(f"Output Image SNR: {snr_db:.2f} dB")
 
     def design_notch(self):
