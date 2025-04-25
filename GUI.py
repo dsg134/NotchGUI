@@ -140,41 +140,38 @@ class InteractiveNotchGUI:
         noise_slider.pack(padx=10, pady=10)
         
         def apply_noise():
-            # Get the current image from canvas1
             img = self.original_image.resize((self.new_width, self.new_height))
             img_array = np.array(img, dtype=np.float32)
-            
+
             # Store original image for SNR calculation
             self.original_array = img_array.copy()
-            
+
             # Convert dB to linear scale for noise variance
             noise_level_db = noise_slider.get()
-            self.noise_variance = 10 ** (noise_level_db / 10)  # Store the noise variance
-            
+            self.noise_variance = 10 ** (noise_level_db / 10)
+
             # Generate Gaussian noise
             noise = np.random.normal(0, np.sqrt(self.noise_variance), img_array.shape)
             noisy_img_array = img_array + noise
-            
-            # Clip values to 0-255 range and convert back to uint8
+
+            # Clip values to 0-255 and convert to uint8
             noisy_img_array = np.clip(noisy_img_array, 0, 255).astype(np.uint8)
             noisy_img = Image.fromarray(noisy_img_array)
-            
-            # Calculate and display input SNR
-            signal_power = np.mean(self.original_array**2)
-            noise_power = np.mean((noisy_img_array.astype(np.float32) - self.original_array)**2)
+
+            # Proper Input SNR Calculation
+            noise_power = np.mean((noisy_img_array.astype(np.float32) - self.original_array) ** 2)
+            signal_power = np.mean(self.original_array ** 2)
             if noise_power > 0:
-                snr_linear = noise_power / self.noise_variance
+                snr_linear = signal_power / noise_power
                 snr_db = 10 * np.log10(snr_linear)
-                print(f"\nInput Image SNR after noise: {snr_db:.2f} dB")
-            
+                print(f"\nInput Image SNR: {snr_db:.2f} dB")
+
             # Update canvas1 with noisy image
             img_tk = ImageTk.PhotoImage(noisy_img)
             self.canvas1.create_image(0, 0, anchor=tk.NW, image=img_tk)
             self.canvas1.image = img_tk
-            
-            # Update the Fourier transforms
+
             self.display_fourier_transform(noisy_img)
-            
             noise_window.destroy()
 
         # Save button
@@ -275,21 +272,19 @@ class InteractiveNotchGUI:
                 self.canvas4.image = img_spec
 
                 # Calculate and display SNR if noise was added
-                if hasattr(self, 'noise_variance'):
+                if hasattr(self, 'original_array'):
+                    filtered_img = img_filtered_normalized.astype(np.float32)
+                    original_img = self.original_array  # float32 version already stored
 
-                    # Get the original image (signal)
-                    original_img = np.array(img_filtered_normalized.resize((self.new_width, self.new_height)), dtype=np.float32)
-                    
-                    # Calculate SNR (dB)
-                    signal_power = np.mean((img_filtered_normalized)**2)
-                    noise_power = self.noise_variance
-                    if noise_power > 0:
-                        snr_linear = 255 * signal_power / (noise_power)
-                        snr_db = 10 * np.log10(snr_linear)
-                        print(signal_power)
-                        print('and')
-                        print(noise_power)
-                        print(f"Output Image SNR: {snr_db:.2f} dB")
+                    # Ensure size match
+                    if filtered_img.shape == original_img.shape:
+                        signal_power = np.mean(original_img ** 2)
+                        noise_power = np.mean((filtered_img - original_img) ** 2)
+
+                        if noise_power > 0:
+                            snr_linear = signal_power / noise_power
+                            snr_db = 10 * np.log10(snr_linear)
+                            print(f"Output Image SNR after filtering: {snr_db:.2f} dB")
 
     def design_notch(self):
 
