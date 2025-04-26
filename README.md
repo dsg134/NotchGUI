@@ -1,0 +1,1 @@
+The presented notch GUI is an interactive frequency domain filtering app. It allows users to design frequency domain filters with the mouse cursor. The user can manually draw notches on an image's Fourier transform with their mouse.
