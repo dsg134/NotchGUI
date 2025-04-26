@@ -3,4 +3,5 @@ Included features:
 - An SNR test to assess the denoising capabilities of your filter.
 - Ability to change the structure of each notch.
 - An easy-to-use UI that requires very few button presses.
+
 To launch the app, clone the repo and run NotchGUI.py.
